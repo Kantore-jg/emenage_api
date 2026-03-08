@@ -6,10 +6,13 @@ use App\Models\Household;
 use App\Models\Notification;
 use App\Models\Payment;
 use App\Models\User;
+use App\Traits\ZoneScope;
 use Illuminate\Http\Request;
 
 class PaymentController extends Controller
 {
+    use ZoneScope;
+
     public function index(Request $request)
     {
         $user = $request->user();
@@ -55,10 +58,20 @@ class PaymentController extends Controller
             'statut_validation' => 'en_attente',
         ]);
 
-        $chefs = User::where('role', 'chef_quartier')->pluck('id');
-        foreach ($chefs as $chefId) {
+        // Notifier les autorités de la même zone (collinaire et au-dessus)
+        $authoritiesQuery = User::whereIn('role', User::AUTHORITY_ROLES);
+        if ($household->geographic_area_id) {
+            $allAncestorIds = $this->getAncestorAreaIds($household->geographic_area_id);
+            $relevantIds = array_merge([$household->geographic_area_id], $allAncestorIds);
+            $authoritiesQuery->where(function ($q) use ($relevantIds) {
+                $q->whereIn('geographic_area_id', $relevantIds)
+                  ->orWhereNull('geographic_area_id');
+            });
+        }
+
+        foreach ($authoritiesQuery->pluck('id') as $authorityId) {
             Notification::create([
-                'user_id' => $chefId,
+                'user_id' => $authorityId,
                 'type' => 'nouveau_paiement',
                 'titre' => 'Nouveau Paiement',
                 'message' => "Le citoyen {$user->nom} a enregistré un paiement pour " . ($request->motif === 'autre' ? $request->motif_autre : $request->motif) . ".",
@@ -73,8 +86,18 @@ class PaymentController extends Controller
         $request->validate(['action' => 'required|in:valider,rejeter']);
 
         $payment = Payment::with('household')->findOrFail($id);
-        $newStatus = $request->action === 'valider' ? 'valide' : 'rejete';
+        $user = $request->user();
 
+        // Vérifier que le paiement est dans la zone de l'utilisateur
+        $householdIds = $this->getAccessibleHouseholdIds($user);
+        if ($householdIds !== null && !in_array($payment->household_id, $householdIds)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Ce paiement n\'est pas dans votre zone.',
+            ], 403);
+        }
+
+        $newStatus = $request->action === 'valider' ? 'valide' : 'rejete';
         $payment->update(['statut_validation' => $newStatus]);
 
         $motifText = $payment->motif === 'autre' ? $payment->motif_autre : $payment->motif;
@@ -89,5 +112,21 @@ class PaymentController extends Controller
             'success' => true,
             'message' => "Paiement " . ($newStatus === 'valide' ? 'validé' : 'rejeté') . " avec succès.",
         ]);
+    }
+
+    /**
+     * Retourne les IDs ancêtres d'une zone (pour notifier les chefs de zones parentes).
+     */
+    private function getAncestorAreaIds(int $areaId): array
+    {
+        $ids = [];
+        $area = \App\Models\GeographicArea::find($areaId);
+
+        while ($area && $area->parent_id) {
+            $ids[] = $area->parent_id;
+            $area = \App\Models\GeographicArea::find($area->parent_id);
+        }
+
+        return $ids;
     }
 }

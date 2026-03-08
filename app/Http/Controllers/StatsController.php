@@ -6,30 +6,40 @@ use App\Models\Household;
 use App\Models\Member;
 use App\Models\Payment;
 use App\Models\User;
+use App\Traits\ZoneScope;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class StatsController extends Controller
 {
-    public function index()
+    use ZoneScope;
+
+    public function index(Request $request)
     {
+        $user = $request->user();
+
         return response()->json([
-            'users_by_month' => $this->usersByMonth(),
-            'payments_by_type' => $this->paymentsByType(),
-            'members_by_household' => $this->membersByHousehold(),
-            'summary' => $this->summary(),
+            'users_by_month' => $this->usersByMonth($user),
+            'payments_by_type' => $this->paymentsByType($user),
+            'members_by_household' => $this->membersByHousehold($user),
+            'summary' => $this->summary($user),
         ]);
     }
 
-    private function usersByMonth(): array
+    private function usersByMonth(User $user): array
     {
-        $rows = User::select(
+        $query = User::select(
                 DB::raw("DATE_FORMAT(created_at, '%Y-%m') as mois"),
                 DB::raw('COUNT(*) as total')
             )
-            ->where('created_at', '>=', now()->subMonths(11)->startOfMonth())
-            ->groupBy('mois')
-            ->orderBy('mois')
-            ->get();
+            ->where('created_at', '>=', now()->subMonths(11)->startOfMonth());
+
+        $userIds = $this->getAccessibleUserIds($user);
+        if ($userIds !== null) {
+            $query->whereIn('id', $userIds);
+        }
+
+        $rows = $query->groupBy('mois')->orderBy('mois')->get();
 
         $labels = [];
         $data = [];
@@ -46,15 +56,20 @@ class StatsController extends Controller
         return ['labels' => $labels, 'data' => $data];
     }
 
-    private function paymentsByType(): array
+    private function paymentsByType(User $user): array
     {
-        $rows = Payment::select(
+        $query = Payment::select(
                 DB::raw("CASE WHEN motif = 'autre' THEN 'Autre' ELSE motif END as type_paiement"),
                 DB::raw('COUNT(*) as total'),
                 DB::raw('SUM(montant) as montant_total')
-            )
-            ->groupBy('type_paiement')
-            ->get();
+            );
+
+        $householdIds = $this->getAccessibleHouseholdIds($user);
+        if ($householdIds !== null) {
+            $query->whereIn('household_id', $householdIds);
+        }
+
+        $rows = $query->groupBy('type_paiement')->get();
 
         return [
             'labels' => $rows->pluck('type_paiement')->toArray(),
@@ -63,9 +78,9 @@ class StatsController extends Controller
         ];
     }
 
-    private function membersByHousehold(): array
+    private function membersByHousehold(User $user): array
     {
-        $rows = Household::select(
+        $query = Household::select(
                 'households.id',
                 DB::raw("CONCAT(users.nom, ' - ', households.quartier) as label"),
                 DB::raw('COUNT(members.id) as total_membres')
@@ -74,8 +89,11 @@ class StatsController extends Controller
             ->leftJoin('members', 'members.household_id', '=', 'households.id')
             ->groupBy('households.id', 'users.nom', 'households.quartier')
             ->orderByDesc('total_membres')
-            ->limit(15)
-            ->get();
+            ->limit(15);
+
+        $this->applyHouseholdZoneFilter($query, $user);
+
+        $rows = $query->get();
 
         return [
             'labels' => $rows->pluck('label')->toArray(),
@@ -83,14 +101,25 @@ class StatsController extends Controller
         ];
     }
 
-    private function summary(): array
+    private function summary(User $user): array
     {
+        $userIds = $this->getAccessibleUserIds($user);
+        $householdIds = $this->getAccessibleHouseholdIds($user);
+
+        $totalUsers = $userIds === null ? User::count() : User::whereIn('id', $userIds)->count();
+        $totalCitoyens = $userIds === null
+            ? User::where('role', 'citoyen')->count()
+            : User::where('role', 'citoyen')->whereIn('id', $userIds)->count();
+        $totalHouseholds = $householdIds === null ? Household::count() : Household::whereIn('id', $householdIds)->count();
+        $totalPayments = $householdIds === null ? Payment::count() : Payment::whereIn('household_id', $householdIds)->count();
+        $totalMembers = $householdIds === null ? Member::count() : Member::whereIn('household_id', $householdIds)->count();
+
         return [
-            'total_users' => User::count(),
-            'total_citoyens' => User::where('role', 'citoyen')->count(),
-            'total_households' => Household::count(),
-            'total_payments' => Payment::count(),
-            'total_members' => Member::count(),
+            'total_users' => $totalUsers,
+            'total_citoyens' => $totalCitoyens,
+            'total_households' => $totalHouseholds,
+            'total_payments' => $totalPayments,
+            'total_members' => $totalMembers,
         ];
     }
 }

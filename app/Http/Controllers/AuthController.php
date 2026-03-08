@@ -29,12 +29,23 @@ class AuthController extends Controller
         }
 
         $token = $user->createToken('auth-token')->plainTextToken;
-        $user->load('household');
+        $user->load(['household', 'geographicArea.level']);
+
+        $zone = null;
+        if ($user->geographicArea) {
+            $zone = [
+                'id' => $user->geographicArea->id,
+                'name' => $user->geographicArea->name,
+                'level' => $user->geographicArea->level->name,
+                'full_path' => $user->geographicArea->full_path,
+            ];
+        }
 
         return response()->json([
             'success' => true,
             'user' => $user,
             'token' => $token,
+            'zone' => $zone,
         ]);
     }
 
@@ -51,7 +62,7 @@ class AuthController extends Controller
     public function user(Request $request)
     {
         $user = $request->user();
-        $user->load('household');
+        $user->load(['household', 'geographicArea.level']);
         return response()->json($user);
     }
 }

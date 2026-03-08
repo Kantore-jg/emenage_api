@@ -13,11 +13,17 @@ class Household extends Model
         'chef_id',
         'quartier',
         'adresse',
+        'geographic_area_id',
     ];
 
     public function chef()
     {
         return $this->belongsTo(User::class, 'chef_id');
+    }
+
+    public function geographicArea()
+    {
+        return $this->belongsTo(GeographicArea::class, 'geographic_area_id');
     }
 
     public function members()
@@ -43,5 +49,19 @@ class Household extends Model
     public function payments()
     {
         return $this->hasMany(Payment::class);
+    }
+
+    /**
+     * Scope: filtrer les ménages visibles par un utilisateur selon sa zone.
+     */
+    public function scopeForUserZone($query, User $user)
+    {
+        $areaIds = $user->getAccessibleAreaIds();
+
+        if ($areaIds === null) {
+            return $query;
+        }
+
+        return $query->whereIn('households.geographic_area_id', $areaIds);
     }
 }

@@ -2,7 +2,13 @@
 
 use App\Http\Controllers\AnnouncementController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\CensusAgentController;
+use App\Http\Controllers\CensusCollectionController;
+use App\Http\Controllers\CensusController;
+use App\Http\Controllers\CensusExportController;
+use App\Http\Controllers\CensusStatsController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\GeographicController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\HouseholdController;
 use App\Http\Controllers\IdentityCardController;
@@ -22,6 +28,15 @@ Route::post('/auth/login', [AuthController::class, 'login']);
 Route::get('/announcements', [AnnouncementController::class, 'index']);
 Route::get('/announcements/{id}', [AnnouncementController::class, 'show']);
 
+// Données géographiques (public pour les formulaires)
+Route::prefix('geographic')->group(function () {
+    Route::get('/levels', [GeographicController::class, 'levels']);
+    Route::get('/areas', [GeographicController::class, 'areas']);
+    Route::get('/areas/{id}', [GeographicController::class, 'show']);
+    Route::get('/tree', [GeographicController::class, 'tree']);
+    Route::get('/search', [GeographicController::class, 'search']);
+});
+
 // Protected routes
 Route::middleware('auth:sanctum')->group(function () {
 
@@ -29,19 +44,17 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/auth/logout', [AuthController::class, 'logout']);
     Route::get('/auth/user', [AuthController::class, 'user']);
 
-    // Admin: gestion des utilisateurs (police, chef_quartier, ministere)
-    Route::middleware('role:admin')->group(function () {
-        Route::get('/admin/users', [UserManagementController::class, 'index']);
-        Route::post('/admin/users', [UserManagementController::class, 'storeByAdmin']);
-        Route::get('/admin/users/{id}', [UserManagementController::class, 'show']);
-        Route::put('/admin/users/{id}', [UserManagementController::class, 'update']);
-        Route::post('/admin/users/{id}/reset-password', [UserManagementController::class, 'resetPassword']);
-        Route::delete('/admin/users/{id}', [UserManagementController::class, 'destroy']);
-    });
-
-    // Chef de quartier: inscrire des citoyens
-    Route::middleware('role:chef_quartier,admin')->group(function () {
-        Route::post('/chef/citoyens', [UserManagementController::class, 'storeCitoyen']);
+    // Gestion des utilisateurs (tous les niveaux d'autorité)
+    // La logique hiérarchique est dans le controller:
+    // admin→ministere, ministere→provincial, provincial→communal,
+    // communal→zonal, zonal→collinaire, collinaire→citoyen
+    Route::middleware('role:admin,ministere,provincial,communal,zonal,collinaire')->group(function () {
+        Route::get('/users', [UserManagementController::class, 'index']);
+        Route::post('/users', [UserManagementController::class, 'store']);
+        Route::get('/users/{id}', [UserManagementController::class, 'show']);
+        Route::put('/users/{id}', [UserManagementController::class, 'update']);
+        Route::post('/users/{id}/reset-password', [UserManagementController::class, 'resetPassword']);
+        Route::delete('/users/{id}', [UserManagementController::class, 'destroy']);
     });
 
     // Stats (accueil)
@@ -63,15 +76,15 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/household/members/{id}', [MemberController::class, 'destroy']);
     });
 
-    // Households (authorities)
-    Route::middleware('role:chef_quartier,ministere,admin')->group(function () {
+    // Households (toutes les autorités)
+    Route::middleware('role:collinaire,zonal,communal,provincial,ministere,admin')->group(function () {
         Route::get('/households', [HouseholdController::class, 'index']);
         Route::get('/households/{id}', [HouseholdController::class, 'show']);
         Route::get('/households-stats', [HouseholdController::class, 'stats']);
     });
 
-    // Announcements (authorities)
-    Route::middleware('role:chef_quartier,ministere,admin')->group(function () {
+    // Announcements (toutes les autorités)
+    Route::middleware('role:collinaire,zonal,communal,provincial,ministere,admin')->group(function () {
         Route::post('/announcements', [AnnouncementController::class, 'store']);
     });
     Route::put('/announcements/{id}', [AnnouncementController::class, 'update']);
@@ -79,13 +92,13 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Reports
     Route::post('/reports', [ReportController::class, 'store']);
-    Route::middleware('role:police,admin')->group(function () {
+    Route::middleware('role:police,collinaire,zonal,communal,provincial,ministere,admin')->group(function () {
         Route::put('/reports/{id}/statut', [ReportController::class, 'updateStatut']);
         Route::get('/reports/all', [ReportController::class, 'all']);
     });
 
-    // Validation (authorities)
-    Route::middleware('role:chef_quartier,ministere,admin')->group(function () {
+    // Validation (toutes les autorités)
+    Route::middleware('role:collinaire,zonal,communal,provincial,ministere,admin')->group(function () {
         Route::put('/validation/members/{id}', [ValidationController::class, 'validateMember']);
         Route::get('/validation/pending', [ValidationController::class, 'pending']);
     });
@@ -97,11 +110,45 @@ Route::middleware('auth:sanctum')->group(function () {
     // Payments
     Route::get('/payments', [PaymentController::class, 'index']);
     Route::post('/payments', [PaymentController::class, 'store']);
-    Route::middleware('role:chef_quartier,admin')->group(function () {
+    Route::middleware('role:collinaire,zonal,communal,provincial,ministere,admin')->group(function () {
         Route::put('/payments/{id}/validate', [PaymentController::class, 'validate_payment']);
     });
 
     // Profile
     Route::get('/profile', [ProfileController::class, 'show']);
     Route::post('/profile', [ProfileController::class, 'update']);
+
+    // ==========================================
+    // Module Recensement
+    // ==========================================
+
+    // Gestion des campagnes (autorités uniquement)
+    Route::middleware('role:collinaire,zonal,communal,provincial,ministere,admin')->group(function () {
+        Route::get('/censuses', [CensusController::class, 'index']);
+        Route::post('/censuses', [CensusController::class, 'store']);
+        Route::get('/censuses/{id}', [CensusController::class, 'show']);
+        Route::put('/censuses/{id}', [CensusController::class, 'update']);
+        Route::put('/censuses/{id}/fields', [CensusController::class, 'updateFields']);
+        Route::delete('/censuses/{id}', [CensusController::class, 'destroy']);
+
+        // Gestion des agents
+        Route::get('/censuses/{censusId}/agents', [CensusAgentController::class, 'index']);
+        Route::post('/censuses/{censusId}/agents', [CensusAgentController::class, 'store']);
+        Route::post('/censuses/{censusId}/agents/assign', [CensusAgentController::class, 'assign']);
+        Route::delete('/censuses/{censusId}/agents/{agentId}', [CensusAgentController::class, 'destroy']);
+
+        // Export et statistiques
+        Route::get('/censuses/{censusId}/export/csv', [CensusExportController::class, 'exportCsv']);
+        Route::get('/censuses/{censusId}/table', [CensusExportController::class, 'table']);
+        Route::get('/censuses/{censusId}/stats', [CensusStatsController::class, 'show']);
+        Route::post('/censuses/compare', [CensusStatsController::class, 'compare']);
+    });
+
+    // Collecte terrain (agents de recensement + autorités)
+    Route::middleware('census_agent')->group(function () {
+        Route::get('/census/my-campaigns', [CensusCollectionController::class, 'myCensuses']);
+        Route::get('/census/{censusId}/form', [CensusCollectionController::class, 'form']);
+        Route::post('/census/{censusId}/responses', [CensusCollectionController::class, 'submit']);
+        Route::get('/census/{censusId}/my-responses', [CensusCollectionController::class, 'myResponses']);
+    });
 });

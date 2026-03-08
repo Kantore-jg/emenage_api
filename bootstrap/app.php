@@ -15,6 +15,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'role' => \App\Http\Middleware\CheckRole::class,
             'chef_famille' => \App\Http\Middleware\CheckChefFamille::class,
+            'census_agent' => \App\Http\Middleware\CheckCensusAgent::class,
         ]);
 
         $middleware->statefulApi();

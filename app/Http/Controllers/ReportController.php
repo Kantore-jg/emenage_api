@@ -3,10 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Models\Report;
+use App\Traits\ZoneScope;
 use Illuminate\Http\Request;
 
 class ReportController extends Controller
 {
+    use ZoneScope;
+
     public function store(Request $request)
     {
         $request->validate([
@@ -30,27 +33,44 @@ class ReportController extends Controller
         $request->validate(['statut' => 'required|in:en_attente,en_cours,resolu']);
 
         $report = Report::findOrFail($id);
+
+        // Vérifier que le signalement est dans la zone de l'utilisateur
+        $userIds = $this->getAccessibleUserIds($request->user());
+        if ($userIds !== null && !in_array($report->citizen_id, $userIds)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Ce signalement n\'est pas dans votre zone.',
+            ], 403);
+        }
+
         $report->update(['statut' => $request->statut]);
 
         return response()->json(['success' => true, 'message' => 'Statut mis à jour avec succès']);
     }
 
-    public function all()
+    public function all(Request $request)
     {
-        $reports = Report::with('citizen:id,nom')
-            ->orderByDesc('created_at')
-            ->get()
-            ->map(function ($r) {
-                return [
-                    'id' => $r->id,
-                    'description' => $r->description,
-                    'latitude' => $r->latitude,
-                    'longitude' => $r->longitude,
-                    'statut' => $r->statut,
-                    'created_at' => $r->created_at,
-                    'citizen_nom' => $r->citizen->nom ?? '',
-                ];
-            });
+        $user = $request->user();
+        $userIds = $this->getAccessibleUserIds($user);
+
+        $query = Report::with('citizen:id,nom')
+            ->orderByDesc('created_at');
+
+        if ($userIds !== null) {
+            $query->whereIn('citizen_id', $userIds);
+        }
+
+        $reports = $query->get()->map(function ($r) {
+            return [
+                'id' => $r->id,
+                'description' => $r->description,
+                'latitude' => $r->latitude,
+                'longitude' => $r->longitude,
+                'statut' => $r->statut,
+                'created_at' => $r->created_at,
+                'citizen_nom' => $r->citizen->nom ?? '',
+            ];
+        });
 
         return response()->json($reports);
     }

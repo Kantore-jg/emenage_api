@@ -42,28 +42,94 @@ il y'a des cas ou le pays a le besoin de recencement par exemple de quelques cho
 ce sont les administrateurs qui vont enregistrer le recencement en ajoutant les champs a repondres,etc.. ca va etre comme celles de google forms.
 
 
-Phase 1 - Architecture géographique multi-pays
-Migration: table countries (name, code ISO, phone_code, currency, locale)
-Migration: table geographic_levels (country_id, name, level_order)
-Migration: table geographic_areas (country_id, parent_id, level_id, name)
-Migration: update users - ajouter country_id
-Migration: update households - remplacer quartier par geographic_area_id
-Modèles: Country, GeographicLevel, GeographicArea + relations
-Update modèles existants (User, Household) avec nouvelles relations
-Seeder: importer data.json dans les tables géographiques (Burundi)
-Controller + routes API pour données géographiques (pays, niveaux, zones)
-Phase 2 - Système de recensement (type Google Forms)
+Phase 1 - Architecture géographique multi-pays ✅ TERMINÉE
+Migration: table geographic_levels (name, slug, level_order)
+Migration: table geographic_areas (name, level_id, parent_id) — arbre auto-référencé
+Migration: update users — ajouter geographic_area_id (FK)
+Migration: update households — ajouter geographic_area_id (FK)
+Modèles: GeographicLevel, GeographicArea + relations (parent, children, ancestors, descendants)
+Update modèle User — relation geographicArea + méthodes isAdmin(), getAccessibleAreaIds()
+Update modèle Household — relation geographicArea + scope forUserZone()
+Trait ZoneScope — logique réutilisable de filtrage par zone (getZoneIds, applyHouseholdZoneFilter, getAccessibleHouseholdIds, getAccessibleUserIds)
+Seeder GeographicSeeder: importe data.json (Burundi: 18 provinces → communes → zones → collines)
+Controller GeographicController — API endpoints:
+  GET /api/geographic/levels — niveaux (province, commune, zone, colline)
+  GET /api/geographic/areas?parent_id= — dropdown cascadé
+  GET /api/geographic/areas/{id} — détail + enfants
+  GET /api/geographic/tree?depth= — arbre complet
+  GET /api/geographic/search?q= — recherche par nom
+
+Phase 1b - Hiérarchie des rôles et contrôle d'accès par zone ✅ TERMINÉE
+Chaîne d'inscription hiérarchique:
+  admin → ministere → provincial → communal → zonal → collinaire → citoyen
+  (+ police et agent_recensement créés par admin)
+Rôles: admin, ministere, provincial, communal, zonal, collinaire, citoyen, police, agent_recensement
+Chaque rôle ne peut créer que le rôle directement en dessous, dans sa propre zone.
+Principe: chaque utilisateur est assigné à une zone géographique lors de son enregistrement.
+  - Admin (geographic_area_id = NULL) → voit TOUT le pays
+  - Ministère → niveau national, voit tout
+  - Provincial assigné à province X → voit province X et descendants
+  - Communal assigné à commune Y → voit commune Y et descendants
+  - Zonal assigné à zone Z → voit zone Z et descendants
+  - Collinaire assigné à colline W → voit colline W uniquement
+  - Citoyen → voit ses propres données
+Vérifications dans UserManagementController:
+  - Le rôle créé doit correspondre au niveau inférieur exact
+  - La zone assignée doit être du bon type géographique (provincial=province, etc.)
+  - La zone doit être dans le périmètre du créateur
+
+Controllers mis à jour avec filtrage par zone:
+  UserManagementController — endpoint unifié /users avec logique hiérarchique
+  HouseholdController — index/show/stats filtrés par zone
+  DashboardController — gouvernement/securite filtrés par zone
+  StatsController — toutes les stats filtrées par zone
+  ValidationController — pending/validate filtrés par zone
+  ReportController — all/updateStatut filtrés par zone
+  PaymentController — validate filtrés par zone, notifications ciblées par zone
+  MemberController — notifications envoyées aux autorités de la zone
+  AuthController — retourne les infos de zone au login
+
+Hiérarchie géographique du Burundi (data.json):
+  Niveau 1: Province (ex: BUJUMBURA, GITEGA, NGOZI...)
+  Niveau 2: Commune (ex: MUKAZA, NTAHANGWA...)
+  Niveau 3: Zone (ex: Buyenzi, Bwiza, Nyakabiga...)
+  Niveau 4: Colline (ex: Quartier Nyakabiga, Quartier Mugoboka...)
+
+Phase 2 - Système de recensement (type Google Forms) ✅ TERMINÉE
 Migration: table censuses (titre, description, statut, dates, scope géographique)
 Migration: table census_fields (census_id, label, type, options JSON, required, order)
+  Types supportés: text, number, date, select, multi_select, boolean, textarea
 Migration: table census_agents (census_id, user_id, zone assignée)
 Migration: table census_responses + census_response_values (EAV)
-Ajouter rôle agent_recensement au enum users
+Rôle agent_recensement ajouté à l'enum users
 Modèles: Census, CensusField, CensusAgent, CensusResponse, CensusResponseValue
-CensusController - CRUD campagnes de recensement (admin)
-CensusAgentController - gestion des agents (admin)
-CensusCollectionController - collecte données terrain (agents)
-CensusExportController - export Excel/PDF des résultats
-CensusStatsController - statistiques et comparaison entre recensements
-Middleware CheckCensusAgent - accès restreint aux agents
-Routes API complètes pour le module recensement
 
+CensusController — CRUD campagnes (autorités):
+  GET    /api/censuses — liste des campagnes (filtrée par zone)
+  POST   /api/censuses — créer campagne + champs (comme Google Forms)
+  GET    /api/censuses/{id} — détail campagne
+  PUT    /api/censuses/{id} — modifier (titre, statut, dates)
+  PUT    /api/censuses/{id}/fields — modifier les champs (brouillon seulement)
+  DELETE /api/censuses/{id} — supprimer
+
+CensusAgentController — gestion des agents:
+  GET    /api/censuses/{id}/agents — lister agents
+  POST   /api/censuses/{id}/agents — créer agent + l'assigner
+  POST   /api/censuses/{id}/agents/assign — assigner un utilisateur existant
+  DELETE /api/censuses/{id}/agents/{agentId} — retirer agent
+
+CensusCollectionController — collecte terrain (agents):
+  GET    /api/census/my-campaigns — mes campagnes actives
+  GET    /api/census/{id}/form — voir le formulaire
+  POST   /api/census/{id}/responses — soumettre une réponse
+  GET    /api/census/{id}/my-responses — mes réponses collectées
+
+CensusExportController — export:
+  GET    /api/censuses/{id}/export/csv — export CSV (séparateur ;, UTF-8 BOM)
+  GET    /api/censuses/{id}/table — données tabulaires JSON
+
+CensusStatsController — statistiques:
+  GET    /api/censuses/{id}/stats — stats complètes (par agent, zone, jour, champ)
+  POST   /api/censuses/compare — comparer N recensements
+
+Middleware CheckCensusAgent — vérifie que l'utilisateur est agent ou autorité

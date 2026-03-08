@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Models\GeographicArea;
 use App\Models\Household;
 use App\Models\User;
 use Illuminate\Database\Seeder;
@@ -10,77 +11,133 @@ class TestUserSeeder extends Seeder
 {
     public function run(): void
     {
-        // Compte admin principal
+        // Chaîne géographique: BUJUMBURA → MUKAZA → Nyakabiga → Quartier Nyakabiga
+        $province  = GeographicArea::where('name', 'BUJUMBURA')->first();
+        $commune   = GeographicArea::where('name', 'MUKAZA')->where('parent_id', $province?->id)->first();
+        $zone      = GeographicArea::where('name', 'Nyakabiga')->where('parent_id', $commune?->id)->first();
+        $colline   = GeographicArea::where('name', 'Quartier Nyakabiga')->where('parent_id', $zone?->id)->first();
+        $colline2  = GeographicArea::where('name', 'Quartier Mugoboka')->where('parent_id', $zone?->id)->first();
+
+        // 1. Admin — voit tout le pays
         $admin = User::create([
             'nom' => 'Admin Système',
             'role' => 'admin',
             'telephone' => '79000001',
-            'email' => 'admin@ubuzimahub.bi',
+            'email' => 'admin@emenage.bi',
             'password' => 'admin123',
+            'geographic_area_id' => null,
         ]);
 
-        // Créés par l'admin
-        $chef = User::create([
-            'nom' => 'Pierre Chef',
-            'role' => 'chef_quartier',
-            'telephone' => '79000002',
-            'email' => 'chef@ubuzimahub.bi',
-            'password' => 'test123',
-            'created_by' => $admin->id,
-        ]);
-
-        User::create([
-            'nom' => 'Paul Ministre',
+        // 2. Ministère — inscrit par l'admin, voit tout le pays
+        $ministere = User::create([
+            'nom' => 'Jean Ministre',
             'role' => 'ministere',
+            'telephone' => '79000002',
+            'email' => 'ministere@emenage.bi',
+            'password' => 'test123',
+            'created_by' => $admin->id,
+            'geographic_area_id' => null,
+        ]);
+
+        // 3. Provincial — inscrit par le ministère, assigné à BUJUMBURA
+        $provincial = User::create([
+            'nom' => 'Pierre Provincial',
+            'role' => 'provincial',
             'telephone' => '79000003',
-            'email' => 'ministere@ubuzimahub.bi',
+            'email' => 'provincial@emenage.bi',
             'password' => 'test123',
-            'created_by' => $admin->id,
+            'created_by' => $ministere->id,
+            'geographic_area_id' => $province?->id,
         ]);
 
-        User::create([
-            'nom' => 'Jacques Police',
-            'role' => 'police',
+        // 4. Communal — inscrit par le provincial, assigné à MUKAZA
+        $communal = User::create([
+            'nom' => 'Marie Communal',
+            'role' => 'communal',
             'telephone' => '79000004',
-            'email' => 'police@ubuzimahub.bi',
+            'email' => 'communal@emenage.bi',
             'password' => 'test123',
-            'created_by' => $admin->id,
+            'created_by' => $provincial->id,
+            'geographic_area_id' => $commune?->id,
         ]);
 
-        // Citoyens créés par le chef de quartier
-        $citoyen1 = User::create([
-            'nom' => 'Jean Citoyen',
-            'role' => 'citoyen',
+        // 5. Zonal — inscrit par le communal, assigné à Nyakabiga
+        $zonal = User::create([
+            'nom' => 'Paul Zonal',
+            'role' => 'zonal',
             'telephone' => '79000005',
-            'email' => 'jean@example.bi',
+            'email' => 'zonal@emenage.bi',
             'password' => 'test123',
-            'created_by' => $chef->id,
+            'created_by' => $communal->id,
+            'geographic_area_id' => $zone?->id,
+        ]);
+
+        // 6. Collinaire — inscrit par le zonal, assigné à Quartier Nyakabiga
+        $collinaire = User::create([
+            'nom' => 'Claude Collinaire',
+            'role' => 'collinaire',
+            'telephone' => '79000006',
+            'email' => 'collinaire@emenage.bi',
+            'password' => 'test123',
+            'created_by' => $zonal->id,
+            'geographic_area_id' => $colline?->id,
+        ]);
+
+        // 7. Citoyen — inscrit par le collinaire
+        $citoyen1 = User::create([
+            'nom' => 'Alain Citoyen',
+            'role' => 'citoyen',
+            'telephone' => '79000007',
+            'email' => 'alain@example.bi',
+            'password' => 'test123',
+            'created_by' => $collinaire->id,
+            'geographic_area_id' => $colline?->id,
         ]);
 
         Household::create([
             'chef_id' => $citoyen1->id,
-            'quartier' => 'Buyenzi',
+            'quartier' => $colline?->name ?? 'Quartier Nyakabiga',
             'adresse' => 'Avenue de la Liberté, N°15',
+            'geographic_area_id' => $colline?->id,
         ]);
 
         $citoyen2 = User::create([
-            'nom' => 'Marie Citoyenne',
+            'nom' => 'Diane Citoyenne',
             'role' => 'citoyen',
-            'telephone' => '79000006',
-            'email' => 'marie@example.bi',
+            'telephone' => '79000008',
+            'email' => 'diane@example.bi',
             'password' => 'test123',
-            'created_by' => $chef->id,
+            'created_by' => $collinaire->id,
+            'geographic_area_id' => $colline2?->id ?? $colline?->id,
         ]);
 
         Household::create([
             'chef_id' => $citoyen2->id,
-            'quartier' => 'Bwiza',
+            'quartier' => $colline2?->name ?? $colline?->name ?? 'Quartier Mugoboka',
             'adresse' => 'Rue du Commerce, N°7',
+            'geographic_area_id' => $colline2?->id ?? $colline?->id,
         ]);
 
-        $this->command->info('Comptes créés:');
-        $this->command->info('  Admin:  admin@ubuzimahub.bi / admin123');
-        $this->command->info('  Chef:   chef@ubuzimahub.bi / test123');
-        $this->command->info('  Autres: test123');
+        // 8. Police — inscrit par l'admin
+        User::create([
+            'nom' => 'Eric Police',
+            'role' => 'police',
+            'telephone' => '79000009',
+            'email' => 'police@emenage.bi',
+            'password' => 'test123',
+            'created_by' => $admin->id,
+            'geographic_area_id' => $commune?->id,
+        ]);
+
+        $this->command->info('');
+        $this->command->info('Comptes créés (hiérarchie):');
+        $this->command->info('  Admin:       admin@emenage.bi / admin123       → tout le pays');
+        $this->command->info('  Ministère:   ministere@emenage.bi / test123    → tout le pays');
+        $this->command->info('  Provincial:  provincial@emenage.bi / test123   → BUJUMBURA');
+        $this->command->info('  Communal:    communal@emenage.bi / test123     → MUKAZA');
+        $this->command->info('  Zonal:       zonal@emenage.bi / test123        → Nyakabiga');
+        $this->command->info('  Collinaire:  collinaire@emenage.bi / test123   → Quartier Nyakabiga');
+        $this->command->info('  Citoyens:    alain@example.bi / test123');
+        $this->command->info('  Police:      police@emenage.bi / test123       → MUKAZA');
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\GeographicArea;
 use App\Models\Member;
 use App\Models\Notification;
 use App\Models\User;
@@ -44,7 +45,8 @@ class MemberController extends Controller
             'statut_validation' => 'en_attente',
         ]);
 
-        $this->notifyChefQuartier(
+        $this->notifyAuthorities(
+            $household,
             'nouveau_membre',
             'Nouveau membre',
             "Un nouveau membre permanent a été ajouté dans le quartier {$household->quartier}"
@@ -73,7 +75,8 @@ class MemberController extends Controller
             'statut_validation' => 'en_attente',
         ]);
 
-        $this->notifyChefQuartier(
+        $this->notifyAuthorities(
+            $household,
             'nouvel_invite',
             'Nouvel invité',
             "Un nouvel invité a été enregistré dans le quartier {$household->quartier}"
@@ -108,12 +111,27 @@ class MemberController extends Controller
         return response()->json(['success' => true, 'message' => 'Membre supprimé avec succès']);
     }
 
-    private function notifyChefQuartier(string $type, string $titre, string $message): void
+    /**
+     * Notifie les autorités de la zone du ménage (collinaire, zonal, etc.)
+     */
+    private function notifyAuthorities($household, string $type, string $titre, string $message): void
     {
-        $chefs = User::where('role', 'chef_quartier')->pluck('id');
-        foreach ($chefs as $chefId) {
+        $query = User::whereIn('role', User::AUTHORITY_ROLES);
+
+        if ($household->geographic_area_id) {
+            $area = GeographicArea::find($household->geographic_area_id);
+            $ancestorIds = $area ? $area->ancestors()->pluck('id')->toArray() : [];
+            $relevantIds = array_merge([$household->geographic_area_id], $ancestorIds);
+
+            $query->where(function ($q) use ($relevantIds) {
+                $q->whereIn('geographic_area_id', $relevantIds)
+                  ->orWhereNull('geographic_area_id');
+            });
+        }
+
+        foreach ($query->pluck('id') as $authorityId) {
             Notification::create([
-                'user_id' => $chefId,
+                'user_id' => $authorityId,
                 'type' => $type,
                 'titre' => $titre,
                 'message' => $message,

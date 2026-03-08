@@ -10,6 +10,39 @@ class User extends Authenticatable
 {
     use HasApiTokens, HasFactory;
 
+    /**
+     * Chaîne d'inscription hiérarchique:
+     * admin → ministere → provincial → communal → zonal → collinaire → citoyen
+     */
+    const ROLE_HIERARCHY = [
+        'admin'      => 'ministere',
+        'ministere'  => 'provincial',
+        'provincial' => 'communal',
+        'communal'   => 'zonal',
+        'zonal'      => 'collinaire',
+        'collinaire' => 'citoyen',
+    ];
+
+    const ALL_ROLES = ['citoyen', 'collinaire', 'zonal', 'communal', 'provincial', 'ministere', 'admin', 'police', 'agent_recensement'];
+
+    const AUTHORITY_ROLES = ['collinaire', 'zonal', 'communal', 'provincial', 'ministere', 'admin'];
+
+    /**
+     * Niveau géographique attendu par rôle.
+     * null = pas de restriction géographique (voit tout le pays).
+     */
+    const ROLE_GEO_LEVEL = [
+        'admin'      => null,
+        'ministere'  => null,
+        'provincial' => 'province',
+        'communal'   => 'commune',
+        'zonal'      => 'zone',
+        'collinaire' => 'colline',
+        'citoyen'    => 'colline',
+        'police'              => null,
+        'agent_recensement'   => null,
+    ];
+
     protected $fillable = [
         'nom',
         'role',
@@ -19,6 +52,7 @@ class User extends Authenticatable
         'photo_profil',
         'qr_code',
         'created_by',
+        'geographic_area_id',
     ];
 
     protected $hidden = [
@@ -31,6 +65,8 @@ class User extends Authenticatable
             'password' => 'hashed',
         ];
     }
+
+    // --- Relations ---
 
     public function household()
     {
@@ -60,5 +96,79 @@ class User extends Authenticatable
     public function createdUsers()
     {
         return $this->hasMany(User::class, 'created_by');
+    }
+
+    public function geographicArea()
+    {
+        return $this->belongsTo(GeographicArea::class, 'geographic_area_id');
+    }
+
+    public function censusAssignments()
+    {
+        return $this->hasMany(CensusAgent::class, 'user_id');
+    }
+
+    // --- Méthodes de rôle ---
+
+    public function isAdmin(): bool
+    {
+        return $this->role === 'admin';
+    }
+
+    public function isAuthority(): bool
+    {
+        return in_array($this->role, self::AUTHORITY_ROLES);
+    }
+
+    /**
+     * Le rôle que cet utilisateur peut inscrire.
+     * Retourne null si ce rôle ne peut inscrire personne.
+     */
+    public function getSubordinateRole(): ?string
+    {
+        return self::ROLE_HIERARCHY[$this->role] ?? null;
+    }
+
+    /**
+     * Vérifie si cet utilisateur peut inscrire un utilisateur avec le rôle donné.
+     */
+    public function canRegister(string $role): bool
+    {
+        if ($this->role === 'admin' && $role === 'police') {
+            return true;
+        }
+
+        return $this->getSubordinateRole() === $role;
+    }
+
+    /**
+     * Les rôles autorisés que cet utilisateur peut créer.
+     */
+    public function getCreatableRoles(): array
+    {
+        $roles = [];
+        $sub = $this->getSubordinateRole();
+        if ($sub) {
+            $roles[] = $sub;
+        }
+        if ($this->role === 'admin') {
+            $roles[] = 'police';
+        }
+        return $roles;
+    }
+
+    // --- Méthodes de zone ---
+
+    /**
+     * Retourne les IDs de toutes les zones accessibles par cet utilisateur.
+     * null = pas de filtre (tout est visible).
+     */
+    public function getAccessibleAreaIds(): ?array
+    {
+        if ($this->isAdmin() || !$this->geographic_area_id) {
+            return null;
+        }
+
+        return $this->geographicArea->getDescendantIds();
     }
 }
