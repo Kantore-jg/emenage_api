@@ -42,7 +42,7 @@ il y'a des cas ou le pays a le besoin de recencement par exemple de quelques cho
 ce sont les administrateurs qui vont enregistrer le recencement en ajoutant les champs a repondres,etc.. ca va etre comme celles de google forms.
 
 
-Phase 1 - Architecture géographique multi-pays ✅ TERMINÉE
+Phase 1 - Architecture géographique multi-pays  TERMINÉE
 Migration: table geographic_levels (name, slug, level_order)
 Migration: table geographic_areas (name, level_id, parent_id) — arbre auto-référencé
 Migration: update users — ajouter geographic_area_id (FK)
@@ -59,7 +59,7 @@ Controller GeographicController — API endpoints:
   GET /api/geographic/tree?depth= — arbre complet
   GET /api/geographic/search?q= — recherche par nom
 
-Phase 1b - Hiérarchie des rôles et contrôle d'accès par zone ✅ TERMINÉE
+Phase 1b - Hiérarchie des rôles et contrôle d'accès par zone  TERMINÉE
 Chaîne d'inscription hiérarchique:
   admin → ministere → provincial → communal → zonal → collinaire → citoyen
   (+ police et agent_recensement créés par admin)
@@ -95,7 +95,7 @@ Hiérarchie géographique du Burundi (data.json):
   Niveau 3: Zone (ex: Buyenzi, Bwiza, Nyakabiga...)
   Niveau 4: Colline (ex: Quartier Nyakabiga, Quartier Mugoboka...)
 
-Phase 2 - Système de recensement (type Google Forms) ✅ TERMINÉE
+Phase 2 - Système de recensement (type Google Forms)  TERMINÉE
 Migration: table censuses (titre, description, statut, dates, scope géographique)
 Migration: table census_fields (census_id, label, type, options JSON, required, order)
   Types supportés: text, number, date, select, multi_select, boolean, textarea
