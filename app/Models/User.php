@@ -50,7 +50,6 @@ class User extends Authenticatable
         'email',
         'password',
         'photo_profil',
-        'qr_code',
         'created_by',
         'geographic_area_id',
     ];

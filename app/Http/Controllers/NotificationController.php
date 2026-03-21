@@ -7,6 +7,16 @@ use Illuminate\Http\Request;
 
 class NotificationController extends Controller
 {
+    public function index(Request $request)
+    {
+        $notifications = Notification::where('user_id', $request->user()->id)
+            ->orderByDesc('created_at')
+            ->limit(20)
+            ->get();
+
+        return response()->json($notifications);
+    }
+
     public function destroy(Request $request, $id)
     {
         $notification = Notification::where('id', $id)

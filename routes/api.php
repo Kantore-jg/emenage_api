@@ -66,6 +66,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/dashboard/securite', [DashboardController::class, 'securite']);
 
     // Notifications
+    Route::get('/dashboard/notifications', [NotificationController::class, 'index']);
     Route::delete('/dashboard/notifications/{id}', [NotificationController::class, 'destroy']);
 
     // Household management (chef de famille)
@@ -105,7 +106,6 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Identity card
     Route::get('/identity-card', [IdentityCardController::class, 'show']);
-    Route::get('/identity-card/qrcode', [IdentityCardController::class, 'qrcode']);
 
     // Payments
     Route::get('/payments', [PaymentController::class, 'index']);

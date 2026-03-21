@@ -16,7 +16,6 @@ return new class extends Migration
             $table->string('email')->unique()->nullable();
             $table->string('password');
             $table->string('photo_profil')->nullable();
-            $table->string('qr_code')->unique()->nullable();
             $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamps();
 
