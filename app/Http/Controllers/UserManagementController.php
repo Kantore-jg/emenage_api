@@ -39,10 +39,19 @@ class UserManagementController extends Controller
             });
         }
 
-        $users = $query->orderByDesc('created_at')->get();
+        $perPage = $request->input('per_page', 15);
+        $paginated = $query->orderByDesc('created_at')->paginate($perPage);
 
         return response()->json([
-            'users' => $users,
+            'users' => $paginated->items(),
+            'pagination' => [
+                'current_page' => $paginated->currentPage(),
+                'last_page' => $paginated->lastPage(),
+                'per_page' => $paginated->perPage(),
+                'total' => $paginated->total(),
+                'from' => $paginated->firstItem() ?? 0,
+                'to' => $paginated->lastItem() ?? 0,
+            ],
             'creatable_roles' => $user->getCreatableRoles(),
         ]);
     }

@@ -9,12 +9,29 @@ class NotificationController extends Controller
 {
     public function index(Request $request)
     {
-        $notifications = Notification::where('user_id', $request->user()->id)
-            ->orderByDesc('created_at')
-            ->limit(20)
-            ->get();
+        $query = Notification::where('user_id', $request->user()->id);
 
-        return response()->json($notifications);
+        if ($request->type) {
+            $query->where('type', $request->type);
+        }
+        if ($request->has('lu')) {
+            $query->where('lu', $request->boolean('lu'));
+        }
+
+        $perPage = $request->input('per_page', 20);
+        $paginated = $query->orderByDesc('created_at')->paginate($perPage);
+
+        return response()->json([
+            'notifications' => $paginated->items(),
+            'pagination' => [
+                'current_page' => $paginated->currentPage(),
+                'last_page' => $paginated->lastPage(),
+                'per_page' => $paginated->perPage(),
+                'total' => $paginated->total(),
+                'from' => $paginated->firstItem() ?? 0,
+                'to' => $paginated->lastItem() ?? 0,
+            ],
+        ]);
     }
 
     public function destroy(Request $request, $id)

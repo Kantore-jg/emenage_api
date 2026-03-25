@@ -17,6 +17,10 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ReportController;
+use App\Http\Controllers\EventController;
+use App\Http\Controllers\FeedbackController;
+use App\Http\Controllers\ReportExportController;
+use App\Http\Controllers\SearchController;
 use App\Http\Controllers\StatsController;
 use App\Http\Controllers\UserManagementController;
 use App\Http\Controllers\ValidationController;
@@ -57,6 +61,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/users/{id}', [UserManagementController::class, 'destroy']);
     });
 
+    // Recherche globale
+    Route::get('/search', [SearchController::class, 'search']);
+
     // Stats (accueil)
     Route::get('/stats', [StatsController::class, 'index']);
 
@@ -93,6 +100,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Reports
     Route::post('/reports', [ReportController::class, 'store']);
+    Route::post('/reports/{reportId}/feedback', [FeedbackController::class, 'store']);
+    Route::get('/feedbacks/mine', [FeedbackController::class, 'myFeedbacks']);
     Route::middleware('role:police,collinaire,zonal,communal,provincial,ministere,admin')->group(function () {
         Route::put('/reports/{id}/statut', [ReportController::class, 'updateStatut']);
         Route::get('/reports/all', [ReportController::class, 'all']);
@@ -142,6 +151,20 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/censuses/{censusId}/table', [CensusExportController::class, 'table']);
         Route::get('/censuses/{censusId}/stats', [CensusStatsController::class, 'show']);
         Route::post('/censuses/compare', [CensusStatsController::class, 'compare']);
+    });
+
+    // Export PDF
+    Route::middleware('role:collinaire,zonal,communal,provincial,ministere,admin')->group(function () {
+        Route::get('/export/zone-report', [ReportExportController::class, 'zoneReport']);
+    });
+
+    // Calendrier communautaire
+    Route::get('/events', [EventController::class, 'index']);
+    Route::get('/events/{id}', [EventController::class, 'show']);
+    Route::middleware('role:collinaire,zonal,communal,provincial,ministere,admin')->group(function () {
+        Route::post('/events', [EventController::class, 'store']);
+        Route::put('/events/{id}', [EventController::class, 'update']);
+        Route::delete('/events/{id}', [EventController::class, 'destroy']);
     });
 
     // Collecte terrain (agents de recensement + autorités)

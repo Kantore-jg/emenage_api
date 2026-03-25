@@ -111,11 +111,29 @@ class DashboardController extends Controller
         $user = $request->user();
         $userIds = $this->getAccessibleUserIds($user);
 
-        $query = Report::with('citizen:id,nom,telephone')
+        $query = Report::with(['citizen:id,nom,telephone', 'photos', 'feedback'])
             ->orderByDesc('created_at');
 
         if ($userIds !== null) {
             $query->whereIn('citizen_id', $userIds);
+        }
+        if ($request->statut) {
+            $query->where('statut', $request->statut);
+        }
+        if ($request->search) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('description', 'LIKE', "%{$search}%")
+                  ->orWhereHas('citizen', function ($sub) use ($search) {
+                      $sub->where('nom', 'LIKE', "%{$search}%");
+                  });
+            });
+        }
+        if ($request->date_from) {
+            $query->whereDate('created_at', '>=', $request->date_from);
+        }
+        if ($request->date_to) {
+            $query->whereDate('created_at', '<=', $request->date_to);
         }
 
         $reports = $query->get()->map(function ($r) {
@@ -128,6 +146,14 @@ class DashboardController extends Controller
                 'created_at' => $r->created_at,
                 'citizen_nom' => $r->citizen->nom ?? '',
                 'citizen_telephone' => $r->citizen->telephone ?? '',
+                'photos' => $r->photos->map(fn($p) => [
+                    'id' => $p->id,
+                    'url' => asset('storage/' . $p->path),
+                ]),
+                'feedback' => $r->feedback ? [
+                    'rating' => $r->feedback->rating,
+                    'comment' => $r->feedback->comment,
+                ] : null,
             ];
         });
 

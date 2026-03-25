@@ -63,8 +63,19 @@ class ValidationController extends Controller
         if ($householdIds !== null) {
             $query->whereIn('household_id', $householdIds);
         }
+        if ($request->type) {
+            $query->where('type', $request->type);
+        }
+        if ($request->search) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('nom', 'LIKE', "%{$search}%")
+                  ->orWhere('telephone', 'LIKE', "%{$search}%");
+            });
+        }
 
-        $members = $query->get()->map(function ($m) {
+        $perPage = $request->input('per_page', 15);
+        $paginated = $query->paginate($perPage)->through(function ($m) {
             return [
                 'id' => $m->id,
                 'nom' => $m->nom,
@@ -81,6 +92,16 @@ class ValidationController extends Controller
             ];
         });
 
-        return response()->json($members);
+        return response()->json([
+            'members' => $paginated->items(),
+            'pagination' => [
+                'current_page' => $paginated->currentPage(),
+                'last_page' => $paginated->lastPage(),
+                'per_page' => $paginated->perPage(),
+                'total' => $paginated->total(),
+                'from' => $paginated->firstItem() ?? 0,
+                'to' => $paginated->lastItem() ?? 0,
+            ],
+        ]);
     }
 }

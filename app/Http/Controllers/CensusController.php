@@ -28,10 +28,28 @@ class CensusController extends Controller
         if ($request->statut) {
             $query->where('statut', $request->statut);
         }
+        if ($request->search) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('titre', 'LIKE', "%{$search}%")
+                  ->orWhere('description', 'LIKE', "%{$search}%");
+            });
+        }
 
-        $censuses = $query->orderByDesc('created_at')->get();
+        $perPage = $request->input('per_page', 15);
+        $paginated = $query->orderByDesc('created_at')->paginate($perPage);
 
-        return response()->json(['censuses' => $censuses]);
+        return response()->json([
+            'censuses' => $paginated->items(),
+            'pagination' => [
+                'current_page' => $paginated->currentPage(),
+                'last_page' => $paginated->lastPage(),
+                'per_page' => $paginated->perPage(),
+                'total' => $paginated->total(),
+                'from' => $paginated->firstItem() ?? 0,
+                'to' => $paginated->lastItem() ?? 0,
+            ],
+        ]);
     }
 
     public function store(Request $request)

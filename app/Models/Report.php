@@ -29,4 +29,14 @@ class Report extends Model
     {
         return $this->belongsTo(User::class, 'citizen_id');
     }
+
+    public function photos()
+    {
+        return $this->hasMany(ReportPhoto::class);
+    }
+
+    public function feedback()
+    {
+        return $this->hasOne(Feedback::class);
+    }
 }

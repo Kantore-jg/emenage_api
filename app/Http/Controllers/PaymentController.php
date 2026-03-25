@@ -21,15 +21,40 @@ class PaymentController extends Controller
         if (!$household) {
             return response()->json([
                 'payments' => [],
+                'pagination' => ['current_page' => 1, 'last_page' => 1, 'per_page' => 15, 'total' => 0, 'from' => 0, 'to' => 0],
                 'message' => 'Aucun ménage associé à votre compte.',
             ]);
         }
 
-        $payments = Payment::where('household_id', $household->id)
-            ->orderByDesc('created_at')
-            ->get();
+        $query = Payment::where('household_id', $household->id);
 
-        return response()->json(['payments' => $payments]);
+        if ($request->statut_validation) {
+            $query->where('statut_validation', $request->statut_validation);
+        }
+        if ($request->motif) {
+            $query->where('motif', $request->motif);
+        }
+        if ($request->date_from) {
+            $query->whereDate('date_paiement', '>=', $request->date_from);
+        }
+        if ($request->date_to) {
+            $query->whereDate('date_paiement', '<=', $request->date_to);
+        }
+
+        $perPage = $request->input('per_page', 15);
+        $paginated = $query->orderByDesc('created_at')->paginate($perPage);
+
+        return response()->json([
+            'payments' => $paginated->items(),
+            'pagination' => [
+                'current_page' => $paginated->currentPage(),
+                'last_page' => $paginated->lastPage(),
+                'per_page' => $paginated->perPage(),
+                'total' => $paginated->total(),
+                'from' => $paginated->firstItem() ?? 0,
+                'to' => $paginated->lastItem() ?? 0,
+            ],
+        ]);
     }
 
     public function store(Request $request)

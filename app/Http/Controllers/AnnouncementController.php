@@ -7,25 +7,45 @@ use Illuminate\Http\Request;
 
 class AnnouncementController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $announcements = Announcement::with('author:id,nom')
-            ->orderByDesc('created_at')
-            ->get()
-            ->map(function ($a) {
-                return [
-                    'id' => $a->id,
-                    'titre' => $a->titre,
-                    'contenu' => $a->contenu,
-                    'autorite' => $a->autorite,
-                    'date' => $a->date,
-                    'created_at' => $a->created_at,
-                    'author_id' => $a->author_id,
-                    'author_name' => $a->author->nom ?? '',
-                ];
-            });
+        $query = Announcement::with('author:id,nom')
+            ->orderByDesc('created_at');
 
-        return response()->json(['announcements' => $announcements]);
+        if ($request->search) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('titre', 'LIKE', "%{$search}%")
+                  ->orWhere('contenu', 'LIKE', "%{$search}%")
+                  ->orWhere('autorite', 'LIKE', "%{$search}%");
+            });
+        }
+
+        $perPage = $request->input('per_page', 10);
+        $paginated = $query->paginate($perPage)->through(function ($a) {
+            return [
+                'id' => $a->id,
+                'titre' => $a->titre,
+                'contenu' => $a->contenu,
+                'autorite' => $a->autorite,
+                'date' => $a->date,
+                'created_at' => $a->created_at,
+                'author_id' => $a->author_id,
+                'author_name' => $a->author->nom ?? '',
+            ];
+        });
+
+        return response()->json([
+            'announcements' => $paginated->items(),
+            'pagination' => [
+                'current_page' => $paginated->currentPage(),
+                'last_page' => $paginated->lastPage(),
+                'per_page' => $paginated->perPage(),
+                'total' => $paginated->total(),
+                'from' => $paginated->firstItem() ?? 0,
+                'to' => $paginated->lastItem() ?? 0,
+            ],
+        ]);
     }
 
     public function show($id)

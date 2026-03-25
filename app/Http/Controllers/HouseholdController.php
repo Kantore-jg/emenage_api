@@ -46,26 +46,39 @@ class HouseholdController extends Controller
         if ($request->geographic_area_id) {
             $query->where('households.geographic_area_id', $request->geographic_area_id);
         }
+        if ($request->quartier) {
+            $query->where('households.quartier', $request->quartier);
+        }
         if ($request->search) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
                 $q->where('households.quartier', 'LIKE', "%{$search}%")
-                  ->orWhere('users.nom', 'LIKE', "%{$search}%");
+                  ->orWhere('users.nom', 'LIKE', "%{$search}%")
+                  ->orWhere('users.telephone', 'LIKE', "%{$search}%")
+                  ->orWhere('households.adresse', 'LIKE', "%{$search}%");
             });
         }
 
-        $households = $query->orderBy('households.quartier')
+        $perPage = $request->input('per_page', 15);
+        $paginated = $query->orderBy('households.quartier')
             ->orderByDesc('households.created_at')
-            ->get();
+            ->paginate($perPage);
 
-        // Quartiers disponibles dans la zone de l'utilisateur
         $quartiersQuery = Household::distinct();
         $this->applyHouseholdZoneFilter($quartiersQuery, $user);
         $quartiers = $quartiersQuery->pluck('quartier')->sort()->values();
 
         return response()->json([
-            'households' => $households,
+            'households' => $paginated->items(),
             'quartiers' => $quartiers,
+            'pagination' => [
+                'current_page' => $paginated->currentPage(),
+                'last_page' => $paginated->lastPage(),
+                'per_page' => $paginated->perPage(),
+                'total' => $paginated->total(),
+                'from' => $paginated->firstItem() ?? 0,
+                'to' => $paginated->lastItem() ?? 0,
+            ],
         ]);
     }
 
