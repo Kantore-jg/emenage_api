@@ -3,13 +3,18 @@
 namespace App\Http\Controllers;
 
 use App\Models\GeographicArea;
+use App\Models\Household;
 use App\Models\Member;
 use App\Models\Notification;
 use App\Models\User;
+use App\Traits\ZoneScope;
 use Illuminate\Http\Request;
+use Illuminate\Http\Exceptions\HttpResponseException;
 
 class MemberController extends Controller
 {
+    use ZoneScope;
+
     public function storeMember(Request $request)
     {
         $request->validate([
@@ -17,9 +22,10 @@ class MemberController extends Controller
             'age' => 'required|integer|min:0',
             'telephone' => 'nullable|string|max:20',
             'photo_cni' => 'nullable|image|max:5120',
+            'household_id' => 'nullable|integer|exists:households,id',
         ]);
 
-        $household = $request->user()->household;
+        $household = $this->resolveTargetHousehold($request);
         $age = (int) $request->age;
 
         if ($age > 18 && !$request->hasFile('photo_cni')) {
@@ -61,9 +67,10 @@ class MemberController extends Controller
             'nom' => 'required|string|max:255',
             'age' => 'required|integer|min:0',
             'telephone' => 'nullable|string|max:20',
+            'household_id' => 'nullable|integer|exists:households,id',
         ]);
 
-        $household = $request->user()->household;
+        $household = $this->resolveTargetHousehold($request);
 
         Member::create([
             'household_id' => $household->id,
@@ -87,13 +94,13 @@ class MemberController extends Controller
 
     public function updateInvite(Request $request, $id)
     {
-        $household = $request->user()->household;
+        $request->validate(['statut' => 'required|in:present,parti']);
+
         $member = Member::where('id', $id)
-            ->where('household_id', $household->id)
             ->where('type', 'invite')
             ->firstOrFail();
 
-        $request->validate(['statut' => 'required|in:present,parti']);
+        $this->authorizeMemberAccess($request, $member);
         $member->update(['statut' => $request->statut]);
 
         return response()->json(['success' => true, 'message' => 'Statut mis à jour avec succès']);
@@ -101,14 +108,77 @@ class MemberController extends Controller
 
     public function destroy(Request $request, $id)
     {
-        $household = $request->user()->household;
-        $member = Member::where('id', $id)
-            ->where('household_id', $household->id)
-            ->firstOrFail();
+        $member = Member::findOrFail($id);
+        $this->authorizeMemberAccess($request, $member);
 
         $member->delete();
 
         return response()->json(['success' => true, 'message' => 'Membre supprimé avec succès']);
+    }
+
+    private function resolveTargetHousehold(Request $request): Household
+    {
+        $user = $request->user();
+
+        if ($user->isAuthority()) {
+            $householdId = $request->input('household_id');
+
+            if (!$householdId) {
+                throw new HttpResponseException(response()->json([
+                    'success' => false,
+                    'message' => 'Le ménage cible est obligatoire pour cette opération.',
+                ], 422));
+            }
+
+            $household = Household::findOrFail($householdId);
+            $this->authorizeHouseholdAccess($user, $household);
+
+            return $household;
+        }
+
+        $household = $user->household;
+        if (!$household) {
+            throw new HttpResponseException(response()->json([
+                'success' => false,
+                'message' => 'Aucun ménage associé à votre compte.',
+            ], 403));
+        }
+
+        return $household;
+    }
+
+    private function authorizeMemberAccess(Request $request, Member $member): void
+    {
+        $member->loadMissing('household');
+
+        if (!$member->household) {
+            abort(404, 'Ménage introuvable pour ce membre.');
+        }
+
+        $this->authorizeHouseholdAccess($request->user(), $member->household);
+    }
+
+    private function authorizeHouseholdAccess(User $user, Household $household): void
+    {
+        if ($user->isAuthority()) {
+            $areaIds = $this->getZoneIds($user);
+
+            if ($areaIds !== null && !in_array($household->geographic_area_id, $areaIds)) {
+                throw new HttpResponseException(response()->json([
+                    'success' => false,
+                    'message' => 'Accès refusé. Ce ménage n\'est pas dans votre zone.',
+                ], 403));
+            }
+
+            return;
+        }
+
+        if (!$user->household || $user->household->id !== $household->id) {
+            throw new HttpResponseException(response()->json([
+                'success' => false,
+                'message' => 'Accès refusé pour ce ménage.',
+            ], 403));
+        }
     }
 
     /**

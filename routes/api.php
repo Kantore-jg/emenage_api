@@ -76,8 +76,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/dashboard/notifications', [NotificationController::class, 'index']);
     Route::delete('/dashboard/notifications/{id}', [NotificationController::class, 'destroy']);
 
-    // Household management (chef de famille)
-    Route::middleware('chef_famille')->group(function () {
+    // Household members management (chef de famille + autorités)
+    Route::middleware('role:citoyen,collinaire,zonal,communal,provincial,ministere,admin')->group(function () {
         Route::post('/household/members', [MemberController::class, 'storeMember']);
         Route::post('/household/invites', [MemberController::class, 'storeInvite']);
         Route::put('/household/invites/{id}', [MemberController::class, 'updateInvite']);
