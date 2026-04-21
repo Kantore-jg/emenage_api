@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Announcement;
+use App\Services\UserEmailService;
 use Illuminate\Http\Request;
 
 class AnnouncementController extends Controller
@@ -67,16 +68,17 @@ class AnnouncementController extends Controller
         ]);
     }
 
-    public function store(Request $request)
+    public function store(Request $request, UserEmailService $userEmailService)
     {
         $request->validate([
             'titre' => 'required|string|max:255',
             'contenu' => 'required|string',
             'autorite' => 'required|string|max:255',
             'date' => 'nullable|date',
+            'send_email_to_all' => 'nullable|boolean',
         ]);
 
-        Announcement::create([
+        $announcement = Announcement::create([
             'author_id' => $request->user()->id,
             'titre' => trim($request->titre),
             'contenu' => trim($request->contenu),
@@ -84,7 +86,16 @@ class AnnouncementController extends Controller
             'date' => $request->date ?? now()->toDateString(),
         ]);
 
-        return response()->json(['success' => true, 'message' => 'Communiqué publié avec succès'], 201);
+        $emailsSent = 0;
+        if ($request->boolean('send_email_to_all')) {
+            $emailsSent = $userEmailService->sendAnnouncementToAllUsers($announcement, $request->user());
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Communiqué publié avec succès',
+            'emails_sent' => $emailsSent,
+        ], 201);
     }
 
     public function update(Request $request, $id)

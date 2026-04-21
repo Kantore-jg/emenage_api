@@ -6,6 +6,7 @@ use App\Models\GeographicArea;
 use App\Models\GeographicLevel;
 use App\Models\Household;
 use App\Models\User;
+use App\Services\UserEmailService;
 use App\Traits\ZoneScope;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -64,7 +65,7 @@ class UserManagementController extends Controller
      * Chaque niveau ne peut inscrire que le niveau directement en dessous
      * et uniquement dans sa propre zone géographique ou ses descendants.
      */
-    public function store(Request $request)
+    public function store(Request $request, UserEmailService $userEmailService)
     {
         $currentUser = $request->user();
         $targetRole = $request->input('role');
@@ -156,6 +157,7 @@ class UserManagementController extends Controller
 
         $user->load('geographicArea:id,name,level_id');
         $zone_info = $user->geographicArea ? $user->geographicArea->full_path : 'Tout le pays';
+        $emailSent = $userEmailService->sendWelcomeEmail($user, $password, $currentUser);
 
         return response()->json([
             'success' => true,
@@ -163,6 +165,8 @@ class UserManagementController extends Controller
             'user' => $user,
             'password' => $password,
             'zone' => $zone_info,
+            'email_sent' => $emailSent,
+            'has_email' => filled($user->email),
         ], 201);
     }
 
@@ -228,7 +232,7 @@ class UserManagementController extends Controller
     /**
      * Réinitialiser le mot de passe (admin ou supérieur hiérarchique).
      */
-    public function resetPassword(Request $request, $id)
+    public function resetPassword(Request $request, $id, UserEmailService $userEmailService)
     {
         $currentUser = $request->user();
         $user = User::findOrFail($id);
@@ -242,11 +246,14 @@ class UserManagementController extends Controller
 
         $password = Str::random(8);
         $user->update(['password' => $password]);
+        $emailSent = $userEmailService->sendPasswordResetEmail($user, $password);
 
         return response()->json([
             'success' => true,
             'message' => 'Mot de passe réinitialisé',
             'password' => $password,
+            'email_sent' => $emailSent,
+            'has_email' => filled($user->email),
         ]);
     }
 

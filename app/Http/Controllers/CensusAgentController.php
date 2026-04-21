@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Census;
 use App\Models\CensusAgent;
 use App\Models\User;
+use App\Services\UserEmailService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
@@ -31,7 +32,7 @@ class CensusAgentController extends Controller
      * Créer un agent et l'assigner à un recensement.
      * L'admin crée l'utilisateur agent_recensement + l'assigne à la campagne avec une zone.
      */
-    public function store(Request $request, $censusId)
+    public function store(Request $request, $censusId, UserEmailService $userEmailService)
     {
         $census = Census::findOrFail($censusId);
 
@@ -61,12 +62,15 @@ class CensusAgentController extends Controller
         ]);
 
         $agent->load(['user:id,nom,telephone,email', 'geographicArea:id,name']);
+        $emailSent = $userEmailService->sendWelcomeEmail($user, $password, $request->user());
 
         return response()->json([
             'success' => true,
             'message' => 'Agent créé et assigné avec succès',
             'agent' => $agent,
             'password' => $password,
+            'email_sent' => $emailSent,
+            'has_email' => filled($user->email),
         ], 201);
     }
 
