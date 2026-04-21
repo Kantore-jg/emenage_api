@@ -23,6 +23,10 @@
     @endif
 
     <p>Nous vous recommandons de changer ce mot de passe apres votre premiere connexion.</p>
+    <p>
+        Visiter la plateforme :
+        <a href="http://34.59.117.62:82">http://34.59.117.62:82</a>
+    </p>
     <p>Merci de faire confiance a la plateforme e-Menage.</p>
 </body>
 </html>

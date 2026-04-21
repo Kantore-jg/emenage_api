@@ -14,5 +14,9 @@
     </p>
 
     <p>Connectez-vous avec ce mot de passe puis modifiez-le des que possible pour securiser votre compte.</p>
+    <p>
+        Visiter la plateforme :
+        <a href="http://34.59.117.62:82">http://34.59.117.62:82</a>
+    </p>
 </body>
 </html>

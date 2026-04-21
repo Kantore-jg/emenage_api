@@ -17,6 +17,10 @@
 
     <div style="white-space: pre-line;">{{ $announcement->contenu }}</div>
 
+    <p style="margin-top: 24px;">
+        Visiter la plateforme :
+        <a href="http://34.59.117.62:82">http://34.59.117.62:82</a>
+    </p>
     <p style="margin-top: 24px;">Ce message vous a ete envoye par la plateforme e-Menage.</p>
 </body>
 </html>
