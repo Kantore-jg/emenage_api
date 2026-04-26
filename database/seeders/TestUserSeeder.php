@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Models\Apartment;
 use App\Models\GeographicArea;
 use App\Models\Household;
 use App\Models\User;
@@ -94,11 +95,20 @@ class TestUserSeeder extends Seeder
             'geographic_area_id' => $colline?->id,
         ]);
 
+        $apt1 = Apartment::create([
+            'owner_id' => $citoyen1->id,
+            'geographic_area_id' => $colline?->id,
+            'avenue' => 'Avenue de la Liberté',
+            'numero' => '15',
+            'description' => 'Maison avec 4 chambres, cour intérieure',
+        ]);
+
         Household::create([
             'chef_id' => $citoyen1->id,
             'quartier' => $colline?->name ?? 'Quartier Nyakabiga',
             'adresse' => 'Avenue de la Liberté, N°15',
             'geographic_area_id' => $colline?->id,
+            'apartment_id' => $apt1->id,
         ]);
 
         $citoyen2 = User::create([
@@ -111,11 +121,20 @@ class TestUserSeeder extends Seeder
             'geographic_area_id' => $colline2?->id ?? $colline?->id,
         ]);
 
+        $apt2 = Apartment::create([
+            'owner_id' => $citoyen2->id,
+            'geographic_area_id' => $colline2?->id ?? $colline?->id,
+            'avenue' => 'Rue du Commerce',
+            'numero' => '7',
+            'description' => 'Maison à étage, 3 chambres',
+        ]);
+
         Household::create([
             'chef_id' => $citoyen2->id,
             'quartier' => $colline2?->name ?? $colline?->name ?? 'Quartier Mugoboka',
             'adresse' => 'Rue du Commerce, N°7',
             'geographic_area_id' => $colline2?->id ?? $colline?->id,
+            'apartment_id' => $apt2->id,
         ]);
 
         // 8. Police — inscrit par l'admin

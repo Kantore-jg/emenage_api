@@ -88,6 +88,8 @@ class HouseholdController extends Controller
         $household = Household::with([
             'chef:id,nom,telephone,photo_profil',
             'geographicArea.level',
+            'apartment.owner:id,nom,telephone',
+            'apartment.geographicArea.level',
         ])->findOrFail($id);
 
         // Vérifier l'accès à la zone

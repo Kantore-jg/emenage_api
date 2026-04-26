@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Announcement;
+use App\Models\Apartment;
 use App\Models\Household;
 use App\Models\Member;
 use App\Models\Report;
@@ -27,8 +28,9 @@ class SearchController extends Controller
         $announcements = $this->searchAnnouncements($q, $limit);
         $reports = $this->searchReports($q, $user, $limit);
         $members = $this->searchMembers($q, $user, $limit);
+        $apartments = $this->searchApartments($q, $user, $limit);
 
-        $total = count($users) + count($households) + count($announcements) + count($reports) + count($members);
+        $total = count($users) + count($households) + count($announcements) + count($reports) + count($members) + count($apartments);
 
         return response()->json([
             'query' => $q,
@@ -36,6 +38,7 @@ class SearchController extends Controller
             'results' => [
                 'users' => $users,
                 'households' => $households,
+                'apartments' => $apartments,
                 'announcements' => $announcements,
                 'reports' => $reports,
                 'members' => $members,
@@ -120,6 +123,29 @@ class SearchController extends Controller
         $householdIds = $this->getAccessibleHouseholdIds($user);
         if ($householdIds !== null) {
             $query->whereIn('members.household_id', $householdIds);
+        }
+
+        return $query->limit($limit)->get()->toArray();
+    }
+
+    private function searchApartments(string $q, User $user, int $limit): array
+    {
+        $query = Apartment::select(
+                'apartments.id', 'apartments.avenue', 'apartments.numero',
+                'users.nom as owner_nom', 'geographic_areas.name as zone_name'
+            )
+            ->join('users', 'apartments.owner_id', '=', 'users.id')
+            ->join('geographic_areas', 'apartments.geographic_area_id', '=', 'geographic_areas.id')
+            ->where(function ($qb) use ($q) {
+                $qb->where('apartments.avenue', 'LIKE', "%{$q}%")
+                   ->orWhere('apartments.numero', 'LIKE', "%{$q}%")
+                   ->orWhere('users.nom', 'LIKE', "%{$q}%")
+                   ->orWhere('geographic_areas.name', 'LIKE', "%{$q}%");
+            });
+
+        $areaIds = $this->getZoneIds($user);
+        if ($areaIds !== null) {
+            $query->whereIn('apartments.geographic_area_id', $areaIds);
         }
 
         return $query->limit($limit)->get()->toArray();

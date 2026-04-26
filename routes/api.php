@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AnnouncementController;
+use App\Http\Controllers\ApartmentController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CensusAgentController;
 use App\Http\Controllers\CensusCollectionController;
@@ -89,6 +90,28 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/households', [HouseholdController::class, 'index']);
         Route::get('/households/{id}', [HouseholdController::class, 'show']);
         Route::get('/households-stats', [HouseholdController::class, 'stats']);
+    });
+
+    // ==========================================
+    // Module Appartements
+    // ==========================================
+
+    // Mes appartements + CRUD citoyen
+    Route::middleware('role:citoyen')->group(function () {
+        Route::get('/apartments/mine', [ApartmentController::class, 'mine']);
+        Route::post('/apartments', [ApartmentController::class, 'store']);
+        Route::put('/apartments/{id}', [ApartmentController::class, 'update']);
+        Route::delete('/apartments/{id}', [ApartmentController::class, 'destroy']);
+    });
+
+    // Lookup pour le formulaire de ménage (avenues + appartements d'une avenue)
+    Route::get('/apartments/avenues', [ApartmentController::class, 'avenues']);
+    Route::get('/apartments/by-avenue', [ApartmentController::class, 'byAvenue']);
+
+    // Liste et détail (autorités)
+    Route::middleware('role:collinaire,zonal,communal,provincial,ministere,admin')->group(function () {
+        Route::get('/apartments', [ApartmentController::class, 'index']);
+        Route::get('/apartments/{id}', [ApartmentController::class, 'show']);
     });
 
     // Announcements (toutes les autorités)

@@ -97,6 +97,7 @@ class UserManagementController extends Controller
 
         if ($targetRole === 'citoyen') {
             $rules['adresse'] = 'required|string';
+            $rules['apartment_id'] = 'nullable|exists:apartments,id';
         }
 
         $request->validate($rules);
@@ -144,7 +145,6 @@ class UserManagementController extends Controller
             'geographic_area_id' => $geoAreaId,
         ]);
 
-        // Si citoyen, créer aussi le ménage
         if ($targetRole === 'citoyen' && $request->adresse) {
             $area = GeographicArea::find($geoAreaId);
             Household::create([
@@ -152,6 +152,7 @@ class UserManagementController extends Controller
                 'quartier' => $area ? $area->name : '',
                 'adresse' => $request->adresse,
                 'geographic_area_id' => $geoAreaId,
+                'apartment_id' => $request->apartment_id,
             ]);
         }
 

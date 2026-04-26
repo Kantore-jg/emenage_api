@@ -35,7 +35,7 @@ class DashboardController extends Controller
             ->get();
 
         return response()->json([
-            'household' => $household->load('geographicArea:id,name'),
+            'household' => $household->load(['geographicArea:id,name', 'apartment.owner:id,nom,telephone', 'apartment.geographicArea.level']),
             'members' => $members,
             'invites' => $invites,
             'notifications' => $notifications,

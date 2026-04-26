@@ -75,6 +75,11 @@ class GeographicArea extends Model
         return $this->hasMany(Household::class, 'geographic_area_id');
     }
 
+    public function apartments()
+    {
+        return $this->hasMany(Apartment::class, 'geographic_area_id');
+    }
+
     public function users()
     {
         return $this->hasMany(User::class, 'geographic_area_id');

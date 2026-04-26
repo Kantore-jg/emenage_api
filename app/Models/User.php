@@ -107,6 +107,11 @@ class User extends Authenticatable
         return $this->hasMany(CensusAgent::class, 'user_id');
     }
 
+    public function apartments()
+    {
+        return $this->hasMany(Apartment::class, 'owner_id');
+    }
+
     // --- Méthodes de rôle ---
 
     public function isAdmin(): bool

@@ -14,6 +14,7 @@ class Household extends Model
         'quartier',
         'adresse',
         'geographic_area_id',
+        'apartment_id',
     ];
 
     public function chef()
@@ -44,6 +45,11 @@ class Household extends Model
     public function presentInvites()
     {
         return $this->hasMany(Member::class)->where('type', 'invite')->where('statut', 'present');
+    }
+
+    public function apartment()
+    {
+        return $this->belongsTo(Apartment::class, 'apartment_id');
     }
 
     public function payments()

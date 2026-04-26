@@ -13,7 +13,7 @@ class ProfileController extends Controller
     public function show(Request $request)
     {
         $user = $request->user();
-        $user->load('household');
+        $user->load(['household.apartment.owner:id,nom,telephone']);
 
         return response()->json([
             'user' => [
@@ -25,6 +25,8 @@ class ProfileController extends Controller
                 'photo_profil' => $user->photo_profil,
                 'quartier' => $user->household->quartier ?? null,
                 'adresse' => $user->household->adresse ?? null,
+                'apartment_id' => $user->household->apartment_id ?? null,
+                'apartment' => $user->household->apartment ?? null,
             ],
         ]);
     }
@@ -42,6 +44,7 @@ class ProfileController extends Controller
             'confirm_password' => 'nullable|string|same:new_password',
             'quartier' => 'nullable|string',
             'adresse' => 'nullable|string',
+            'apartment_id' => 'nullable|exists:apartments,id',
             'photo_profil' => 'nullable|image|max:5120',
         ]);
 
@@ -71,13 +74,17 @@ class ProfileController extends Controller
         }
         $user->save();
 
-        if ($user->role === 'citoyen' && ($request->quartier || $request->adresse)) {
+        if ($user->role === 'citoyen' && ($request->quartier || $request->adresse || $request->has('apartment_id'))) {
             $household = Household::where('chef_id', $user->id)->first();
             if ($household) {
-                $household->update([
+                $updateData = [
                     'quartier' => $request->quartier ?? $household->quartier,
                     'adresse' => $request->adresse ?? $household->adresse,
-                ]);
+                ];
+                if ($request->has('apartment_id')) {
+                    $updateData['apartment_id'] = $request->apartment_id;
+                }
+                $household->update($updateData);
             }
         }
 
