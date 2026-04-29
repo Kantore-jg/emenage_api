@@ -1,4 +1,4 @@
-# Matrice des Permissions — Ubuzima Hub
+# Matrice des Permissions — Menage
 
 ## Légende
 

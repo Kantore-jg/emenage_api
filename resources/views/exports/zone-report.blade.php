@@ -119,7 +119,7 @@
         </table>
 
         <div class="footer">
-            <p>Document généré automatiquement par Ubuzima Hub &copy; {{ date('Y') }}</p>
+            <p>Document généré automatiquement par Menage &copy; {{ date('Y') }}</p>
             <p>Ce document est strictement confidentiel et réservé aux autorités compétentes.</p>
         </div>
     </div>

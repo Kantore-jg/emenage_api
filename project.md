@@ -1,8 +1,8 @@
-# Ubuzima Hub - Plateforme de Communication Citoyen-Autorité
+# Menage - Plateforme de Communication Citoyen-Autorité
 
 ## 1. Contexte et Objectif
 
-**Ubuzima Hub** est une plateforme web développée pour digitaliser la communication entre les citoyens et les autorités à Bujumbura, au Burundi. Le projet vise à :
+**Menage** est une plateforme web développée pour digitaliser la communication entre les citoyens et les autorités à Bujumbura, au Burundi. Le projet vise à :
 
 - Digitaliser le **Carnet de Ménage** traditionnel
 - Sécuriser le **recensement des invités** pour éviter les amendes/corruptions lors des contrôles
