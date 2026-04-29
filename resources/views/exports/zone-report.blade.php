@@ -32,7 +32,7 @@
 <body>
     <div class="header">
         <h1>RÉPUBLIQUE DU BURUNDI</h1>
-        <p>Ubuzima Hub - Système de Gestion des Ménages</p>
+        <p>Menage - Système de Gestion des Ménages</p>
     </div>
     <div class="subtitle">
         RAPPORT SYNTHÉTIQUE - {{ strtoupper($zoneName) }}
