@@ -8,6 +8,7 @@ use App\Models\Notification;
 use App\Models\User;
 use App\Traits\ZoneScope;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class ApartmentController extends Controller
 {
@@ -122,11 +123,42 @@ class ApartmentController extends Controller
      */
     public function store(Request $request)
     {
+        $avenue = trim((string) $request->input('avenue', ''));
+        $numero = trim((string) $request->input('numero', ''));
+        $description = $request->filled('description')
+            ? trim((string) $request->input('description'))
+            : null;
+
+        $request->merge([
+            'avenue' => $avenue,
+            'numero' => $numero,
+            'description' => $description,
+        ]);
+
         $request->validate([
-            'geographic_area_id' => 'required|exists:geographic_areas,id',
+            'geographic_area_id' => [
+                'required',
+                'exists:geographic_areas,id',
+                function ($attribute, $value, $fail) {
+                    $area = GeographicArea::with('level')->find($value);
+                    if (!$area || ($area->level->slug ?? null) !== 'colline') {
+                        $fail('L\'appartement doit être rattaché à une colline (quartier).');
+                    }
+                },
+            ],
             'avenue' => 'required|string|max:255',
-            'numero' => 'required|string|max:50',
+            'numero' => [
+                'required',
+                'string',
+                'max:50',
+                Rule::unique('apartments')->where(fn ($q) => $q
+                    ->where('geographic_area_id', $request->geographic_area_id)
+                    ->where('avenue', $avenue)
+                ),
+            ],
             'description' => 'nullable|string|max:1000',
+        ], [
+            'numero.unique' => 'Un appartement avec cette avenue et ce numéro existe déjà dans ce quartier.',
         ]);
 
         $user = $request->user();
@@ -134,9 +166,9 @@ class ApartmentController extends Controller
         $apartment = Apartment::create([
             'owner_id' => $user->id,
             'geographic_area_id' => $request->geographic_area_id,
-            'avenue' => trim($request->avenue),
-            'numero' => trim($request->numero),
-            'description' => $request->description ? trim($request->description) : null,
+            'avenue' => $avenue,
+            'numero' => $numero,
+            'description' => $description,
         ]);
 
         $this->notifyAuthorities(
@@ -154,16 +186,10 @@ class ApartmentController extends Controller
     }
 
     /**
-     * Modifier un appartement (propriétaire uniquement).
+     * Modifier un appartement (propriétaire ou autorité).
      */
     public function update(Request $request, $id)
     {
-        $request->validate([
-            'avenue' => 'sometimes|required|string|max:255',
-            'numero' => 'sometimes|required|string|max:50',
-            'description' => 'nullable|string|max:1000',
-        ]);
-
         $user = $request->user();
         $apartment = Apartment::findOrFail($id);
 
@@ -172,6 +198,49 @@ class ApartmentController extends Controller
                 'success' => false,
                 'message' => 'Vous ne pouvez modifier que vos propres appartements.',
             ], 403);
+        }
+
+        if ($user->isAuthority() && $apartment->owner_id !== $user->id) {
+            $denied = $this->denyIfOutsideZone($user, $apartment->geographic_area_id);
+            if ($denied) {
+                return $denied;
+            }
+        }
+
+        if ($request->has('avenue')) {
+            $request->merge(['avenue' => trim((string) $request->input('avenue'))]);
+        }
+        if ($request->has('numero')) {
+            $request->merge(['numero' => trim((string) $request->input('numero'))]);
+        }
+        if ($request->has('description')) {
+            $request->merge([
+                'description' => $request->filled('description')
+                    ? trim((string) $request->input('description'))
+                    : null,
+            ]);
+        }
+
+        $request->validate([
+            'avenue' => 'sometimes|required|string|max:255',
+            'numero' => 'sometimes|required|string|max:50',
+            'description' => 'nullable|string|max:1000',
+        ]);
+
+        $avenue = $request->input('avenue', $apartment->avenue);
+        $numero = $request->input('numero', $apartment->numero);
+
+        $duplicate = Apartment::where('geographic_area_id', $apartment->geographic_area_id)
+            ->where('avenue', $avenue)
+            ->where('numero', $numero)
+            ->where('id', '!=', $apartment->id)
+            ->exists();
+
+        if ($duplicate) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Un appartement avec cette avenue et ce numéro existe déjà dans ce quartier.',
+            ], 422);
         }
 
         $apartment->update($request->only(['avenue', 'numero', 'description']));
@@ -196,6 +265,13 @@ class ApartmentController extends Controller
                 'success' => false,
                 'message' => 'Vous ne pouvez supprimer que vos propres appartements.',
             ], 403);
+        }
+
+        if ($user->isAuthority() && $apartment->owner_id !== $user->id) {
+            $denied = $this->denyIfOutsideZone($user, $apartment->geographic_area_id);
+            if ($denied) {
+                return $denied;
+            }
         }
 
         if ($apartment->households()->exists()) {
@@ -240,6 +316,11 @@ class ApartmentController extends Controller
             'avenue' => 'required|string',
         ]);
 
+        $denied = $this->denyIfOutsideZone($request->user(), (int) $request->geographic_area_id);
+        if ($denied) {
+            return $denied;
+        }
+
         $apartments = Apartment::where('geographic_area_id', $request->geographic_area_id)
             ->where('avenue', $request->avenue)
             ->with(['owner:id,nom,telephone'])
@@ -259,6 +340,11 @@ class ApartmentController extends Controller
             'geographic_area_id' => 'required|exists:geographic_areas,id',
         ]);
 
+        $denied = $this->denyIfOutsideZone($request->user(), (int) $request->geographic_area_id);
+        if ($denied) {
+            return $denied;
+        }
+
         $avenues = Apartment::where('geographic_area_id', $request->geographic_area_id)
             ->distinct()
             ->orderBy('avenue')
@@ -276,6 +362,28 @@ class ApartmentController extends Controller
         }
 
         return $query->whereIn('apartments.geographic_area_id', $areaIds);
+    }
+
+    /**
+     * Refuse l'accès si la zone demandée n'est pas dans le périmètre de l'utilisateur.
+     * null (admin / sans restriction) = accès autorisé.
+     */
+    private function denyIfOutsideZone(User $user, int $geographicAreaId)
+    {
+        $areaIds = $this->getZoneIds($user);
+
+        if ($areaIds === null) {
+            return null;
+        }
+
+        if (!in_array($geographicAreaId, $areaIds)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Accès refusé. Cette zone n\'est pas dans votre périmètre.',
+            ], 403);
+        }
+
+        return null;
     }
 
     private function notifyAuthorities(Apartment $apartment, string $type, string $titre, string $message): void

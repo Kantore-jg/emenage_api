@@ -96,10 +96,14 @@ Route::middleware('auth:sanctum')->group(function () {
     // Module Appartements
     // ==========================================
 
-    // Mes appartements + CRUD citoyen
+    // Mes appartements + création (citoyen propriétaire)
     Route::middleware('role:citoyen')->group(function () {
         Route::get('/apartments/mine', [ApartmentController::class, 'mine']);
         Route::post('/apartments', [ApartmentController::class, 'store']);
+    });
+
+    // Modification / suppression (propriétaire citoyen ou autorité — contrôle dans le controller)
+    Route::middleware('role:citoyen,collinaire,zonal,communal,provincial,ministere,admin')->group(function () {
         Route::put('/apartments/{id}', [ApartmentController::class, 'update']);
         Route::delete('/apartments/{id}', [ApartmentController::class, 'destroy']);
     });

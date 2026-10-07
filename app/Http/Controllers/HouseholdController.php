@@ -2,11 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Apartment;
 use App\Models\Household;
 use App\Models\Payment;
 use App\Traits\ZoneScope;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 
 class HouseholdController extends Controller
 {
@@ -22,11 +22,15 @@ class HouseholdController extends Controller
                 'households.quartier',
                 'households.adresse',
                 'households.geographic_area_id',
+                'households.apartment_id',
                 'households.created_at',
                 'users.nom as chef_nom',
-                'users.telephone as chef_telephone'
+                'users.telephone as chef_telephone',
+                'apartments.avenue as apartment_avenue',
+                'apartments.numero as apartment_numero'
             )
             ->join('users', 'households.chef_id', '=', 'users.id')
+            ->leftJoin('apartments', 'households.apartment_id', '=', 'apartments.id')
             ->selectRaw("COUNT(DISTINCT CASE WHEN members.type = 'permanent' THEN members.id END) as nb_membres")
             ->selectRaw("COUNT(DISTINCT CASE WHEN members.type = 'invite' AND members.statut = 'present' THEN members.id END) as nb_invites_presents")
             ->leftJoin('members', 'households.id', '=', 'members.household_id')
@@ -36,9 +40,12 @@ class HouseholdController extends Controller
                 'households.quartier',
                 'households.adresse',
                 'households.geographic_area_id',
+                'households.apartment_id',
                 'households.created_at',
                 'users.nom',
-                'users.telephone'
+                'users.telephone',
+                'apartments.avenue',
+                'apartments.numero'
             );
 
         $this->applyHouseholdZoneFilter($query, $user);
@@ -49,13 +56,21 @@ class HouseholdController extends Controller
         if ($request->quartier) {
             $query->where('households.quartier', $request->quartier);
         }
+        if ($request->avenue) {
+            $query->where('apartments.avenue', $request->avenue);
+        }
+        if ($request->apartment_id) {
+            $query->where('households.apartment_id', $request->apartment_id);
+        }
         if ($request->search) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
                 $q->where('households.quartier', 'LIKE', "%{$search}%")
                   ->orWhere('users.nom', 'LIKE', "%{$search}%")
                   ->orWhere('users.telephone', 'LIKE', "%{$search}%")
-                  ->orWhere('households.adresse', 'LIKE', "%{$search}%");
+                  ->orWhere('households.adresse', 'LIKE', "%{$search}%")
+                  ->orWhere('apartments.avenue', 'LIKE', "%{$search}%")
+                  ->orWhere('apartments.numero', 'LIKE', "%{$search}%");
             });
         }
 
@@ -68,9 +83,17 @@ class HouseholdController extends Controller
         $this->applyHouseholdZoneFilter($quartiersQuery, $user);
         $quartiers = $quartiersQuery->pluck('quartier')->sort()->values();
 
+        $avenuesQuery = Apartment::query()->distinct();
+        $areaIds = $this->getZoneIds($user);
+        if ($areaIds !== null) {
+            $avenuesQuery->whereIn('geographic_area_id', $areaIds);
+        }
+        $avenues = $avenuesQuery->orderBy('avenue')->pluck('avenue')->filter()->values();
+
         return response()->json([
             'households' => $paginated->items(),
             'quartiers' => $quartiers,
+            'avenues' => $avenues,
             'pagination' => [
                 'current_page' => $paginated->currentPage(),
                 'last_page' => $paginated->lastPage(),
